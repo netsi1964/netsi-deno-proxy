@@ -8,7 +8,9 @@
     "check": "deno check main.ts && deno lint && deno fmt --check"
   },
   "deploy": {
-    "entrypoint": "main.ts"
+    "entrypoint": "main.ts",
+    "org": "netsi1964",
+    "app": "netsi-proxy-deno"
   },
   "fmt": {
     "lineWidth": 90
