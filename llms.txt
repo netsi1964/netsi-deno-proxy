@@ -52,6 +52,21 @@ Your request headers are forwarded to the target, so `Authorization`,
 `content-length`, `origin`, `referer`, `sec-fetch-*`, `sec-ch-ua` and hop-by-hop
 headers — they describe your call to the proxy, not the call to the target.
 
+The proxy adds two headers of its own naming the caller:
+
+```
+Forwarded: for=<your IP address>
+X-Client-IP: <your IP address>
+```
+
+The address is read from the network connection, so anything you send under
+`forwarded`, `x-forwarded-*`, `x-real-ip` or `x-client-ip` is discarded before the
+request goes out — you cannot present yourself to the target as another address.
+`X-Forwarded-For` is deliberately not used: Deno's `fetch` strips it from outgoing
+requests, so setting it would be a promise the runtime does not keep.
+
+This means the target sees the caller's IP address, not just the proxy's.
+
 Sending credentials through a third-party proxy means the proxy operator can see
 them. This one does not log them, but do not send tokens you would not hand over.
 

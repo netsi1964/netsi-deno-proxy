@@ -18,16 +18,16 @@ parameter og henter noget andet end det man bad om — som regel uden fejl.
 
 ## Kontrakt
 
-|                 |                                                                                                    |
-| --------------- | -------------------------------------------------------------------------------------------------- |
-| `url`           | Påkrævet. Absolut `http`- eller `https`-URL, url-encoded.                                          |
-| `method`        | Valgfri. `GET` som default. Tilladt: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS.                 |
-| Request-body    | Videresendes streamet for alt undtagen GET/HEAD.                                                   |
-| Request-headere | Videresendes, undtagen `host`, `content-length`, `origin`, `referer`, `sec-fetch-*` og hop-by-hop. |
-| Svar            | Original status, statustekst, headere og body.                                                     |
-| Redirects       | Følges ikke. En 302 returneres som en 302 med sin `Location`.                                      |
-| `/`             | Dokumentationsside med indbygget tester.                                                           |
-| `/health`       | `{"status":"ok","version":"…"}`                                                                    |
+|                 |                                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `url`           | Påkrævet. Absolut `http`- eller `https`-URL, url-encoded.                                                                                              |
+| `method`        | Valgfri. `GET` som default. Tilladt: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS.                                                                     |
+| Request-body    | Videresendes streamet for alt undtagen GET/HEAD.                                                                                                       |
+| Request-headere | Videresendes, undtagen `host`, `content-length`, `origin`, `referer`, `sec-fetch-*` og hop-by-hop. Proxyen tilføjer selv `Forwarded` og `X-Client-IP`. |
+| Svar            | Original status, statustekst, headere og body.                                                                                                         |
+| Redirects       | Følges ikke. En 302 returneres som en 302 med sin `Location`.                                                                                          |
+| `/`             | Dokumentationsside med indbygget tester.                                                                                                               |
+| `/health`       | `{"status":"ok","version":"…"}`                                                                                                                        |
 
 ## Bevidste afvigelser fra et 1:1-svar
 
@@ -42,6 +42,26 @@ Fire ting kan ikke spejles ordret uden at ødelægge svaret:
 
 Målets egne `access-control-*`-headere fjernes også, så et target ikke kan overskrive
 proxyens CORS-holdning.
+
+## Kalderens IP videregives
+
+Målet får at vide hvem der spurgte, ikke bare at proxyen spurgte:
+
+```
+Forwarded: for=<kalderens IP>
+X-Client-IP: <kalderens IP>
+```
+
+Adressen læses fra selve forbindelsen. Alt hvad klienten selv sender under `forwarded`,
+`x-forwarded-*`, `x-real-ip` eller `x-client-ip` kasseres først — ellers kunne enhver både
+omgå rate limiten og få sin trafik til at se ud som om den kom fra en andens adresse.
+
+`X-Forwarded-For` bruges bevidst ikke. Denos `fetch` fjerner den fra udgående requests, så
+den ville være et løfte runtime ikke holder. Et target der kun læser `X-Forwarded-For` ser
+altså ingen IP — det er en begrænsning i platformen, ikke et valg.
+
+Vær opmærksom på at en IP-adresse er en personoplysning. Proxyen er offentlig og uden
+nøgle, så enhver der bruger den, får sin adresse udleveret til det target de peger på.
 
 ## Grænser
 

@@ -76,6 +76,7 @@ const DEVIATIONS = [
   "Hop-by-hop headers (connection, transfer-encoding, keep-alive, ...) are dropped — they describe a connection that no longer exists.",
   "content-encoding and content-length are dropped: fetch has already decompressed the body, so the original values would describe bytes the client never receives.",
   "Redirects are not followed. A 302 is returned as a 302 with its original Location header.",
+  "Forwarded and X-Client-IP are added to the request the target receives, naming the caller's IP address, so a target sees who asked rather than only that the proxy asked. X-Forwarded-For is not used: the Deno runtime strips it from outgoing requests.",
 ];
 
 // ---------------------------------------------------------------------------
@@ -135,11 +136,22 @@ function takeToken(clientId: string): { allowed: boolean; retryAfter: number } {
   return { allowed: true, retryAfter: 0 };
 }
 
-function clientIdOf(request: Request, info: Deno.ServeHandlerInfo): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
+/**
+ * The caller's address, taken from the connection and never from a header.
+ *
+ * A client can put anything in x-forwarded-for. Believing it would let one caller
+ * dodge the rate limit by rotating a made-up address, and — now that the address
+ * is passed on to the target — let them pin their traffic on someone else.
+ */
+function clientIpOf(info: Deno.ServeHandlerInfo): string {
   const addr = info.remoteAddr;
   return addr.transport === "tcp" ? addr.hostname : "unknown";
+}
+
+/** RFC 7239 node identifier. An IPv6 address has to be bracketed and quoted. */
+function forwardedNode(ip: string): string {
+  if (ip === "unknown") return "unknown";
+  return ip.includes(":") ? `"[${ip}]"` : ip;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +238,13 @@ function logFailure(event: string, detail: Record<string, unknown>) {
 // Proxying
 // ---------------------------------------------------------------------------
 
-function buildUpstreamHeaders(request: Request): Headers {
+/**
+ * Attribution headers the proxy writes itself. Whatever the client sent under
+ * these names is discarded first — see clientIpOf.
+ */
+const ATTRIBUTION = ["forwarded", "x-real-ip", "x-client-ip"];
+
+function buildUpstreamHeaders(request: Request, clientIp: string): Headers {
   const headers = new Headers();
   // Any header named in Connection is hop-by-hop for this request only.
   const connectionListed = new Set(
@@ -243,8 +261,17 @@ function buildUpstreamHeaders(request: Request): Headers {
     // Browser-injected noise that describes the call to the proxy, not the target.
     if (key === "origin" || key === "referer") continue;
     if (key.startsWith("sec-fetch-") || key === "sec-ch-ua") continue;
+    // Attribution is the proxy's to state, not the caller's to claim.
+    if (key.startsWith("x-forwarded-") || ATTRIBUTION.includes(key)) continue;
     headers.set(name, value);
   }
+
+  // Tell the target who asked. x-forwarded-for would be the conventional name,
+  // but Deno's fetch drops it from outgoing requests, so Forwarded (RFC 7239)
+  // carries the standard form and X-Client-IP the one most stacks read directly.
+  headers.set("Forwarded", `for=${forwardedNode(clientIp)}`);
+  if (clientIp !== "unknown") headers.set("X-Client-IP", clientIp);
+
   return headers;
 }
 
@@ -288,7 +315,7 @@ function cappedBody(body: ReadableStream<Uint8Array> | null) {
   );
 }
 
-async function proxy(request: Request, url: URL): Promise<Response> {
+async function proxy(request: Request, url: URL, clientIp: string): Promise<Response> {
   const target = url.searchParams.get("url");
   if (!target) {
     return errorResponse(400, "Missing 'url' query parameter.");
@@ -323,7 +350,7 @@ async function proxy(request: Request, url: URL): Promise<Response> {
   try {
     const upstream = await fetch(parsed, {
       method,
-      headers: buildUpstreamHeaders(request),
+      headers: buildUpstreamHeaders(request, clientIp),
       body: hasBody ? request.body : undefined,
       redirect: "manual",
       signal: AbortSignal.timeout(CONFIG.timeoutMs),
@@ -390,8 +417,8 @@ Deno.serve((request, info) => {
     });
   }
 
-  const clientId = clientIdOf(request, info);
-  const { allowed, retryAfter } = takeToken(clientId);
+  const clientIp = clientIpOf(info);
+  const { allowed, retryAfter } = takeToken(clientIp);
   if (!allowed) {
     return errorResponse(429, "Rate limit reached. Slow down and try again.", {
       "Retry-After": String(Math.max(1, retryAfter)),
@@ -399,7 +426,7 @@ Deno.serve((request, info) => {
     });
   }
 
-  return proxy(request, url);
+  return proxy(request, url, clientIp);
 });
 
 // ---------------------------------------------------------------------------
@@ -478,14 +505,21 @@ function indexPage(): string {
   .lane .why { display: block; font-size: .85rem; color: var(--muted); }
 
   form { display: grid; grid-template-columns: 7rem 1fr auto; gap: .6rem; align-items: stretch; margin-top: 1rem; }
-  select, input, button.run {
+  select, input, textarea, button.run {
     font: inherit; padding: .6rem .7rem; border: 1px solid var(--line);
     border-radius: var(--radius); background: var(--card); color: var(--ink);
   }
-  input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
   button.run { background: var(--signal); border-color: var(--signal); color: #fff; cursor: pointer; padding-inline: 1.2rem; }
   button.run:disabled { opacity: .5; cursor: progress; }
   @media (max-width: 34rem) { form { grid-template-columns: 1fr; } }
+
+  /* Request payload — only meaningful for methods that carry a body. */
+  [hidden] { display: none !important; }
+  .payload { grid-column: 1 / -1; display: grid; gap: .3rem; }
+  .payload label { font-size: .8rem; letter-spacing: .04em; color: var(--muted); margin-top: .5rem; }
+  .payload textarea { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: .85rem; resize: vertical; min-height: 6.5rem; }
+  .payload .note { font-size: .8rem; color: var(--muted); margin: .3rem 0 0; }
 
   .result { margin-top: 1rem; display: none; }
   .result[data-open="true"] { display: block; }
@@ -525,6 +559,8 @@ function indexPage(): string {
       <span class="why">Authorization, content-type, cookies — all forwarded as sent.</span></li>
     <li data-kind="drop"><span class="what">Origin, Referer and Sec-Fetch-* are removed</span>
       <span class="why">They describe your call to the proxy, not the call to the target.</span></li>
+    <li data-kind="add"><span class="what">Your IP address is passed on to the target</span>
+      <span class="why">As <code>Forwarded: for=…</code> and <code>X-Client-IP</code>, read from the connection so it cannot be faked. The target sees who asked, not just the proxy.</span></li>
     <li data-kind="pass"><span class="what">The target's status and headers come back verbatim</span>
       <span class="why">A 404 is a 404. A redirect is returned, not followed.</span></li>
     <li data-kind="add"><span class="what">${PROXY_HEADER} is added to the response</span>
@@ -542,6 +578,22 @@ function indexPage(): string {
     </select>
     <input id="target" type="url" value="https://api.github.com/repos/denoland/deno" aria-label="Target URL" placeholder="https://…">
     <button class="run" type="submit">Send</button>
+
+    <div class="payload" id="payload" hidden>
+      <label for="ctype">Content-Type</label>
+      <input id="ctype" list="ctypes" value="application/json" spellcheck="false" autocomplete="off" placeholder="application/json">
+      <datalist id="ctypes">
+        <option value="application/json"></option>
+        <option value="application/x-www-form-urlencoded"></option>
+        <option value="text/plain"></option>
+        <option value="application/xml"></option>
+        <option value="text/csv"></option>
+      </datalist>
+
+      <label for="reqbody">Request body</label>
+      <textarea id="reqbody" spellcheck="false" placeholder='{ "hello": "world" }'></textarea>
+      <p class="note">Leave it empty to send the request without a body.</p>
+    </div>
   </form>
   <div class="result" id="result">
     <div class="status" id="status"></div>
@@ -600,13 +652,38 @@ function indexPage(): string {
   var headersEl = document.getElementById('headers');
   var bodyEl = document.getElementById('body');
   var button = form.querySelector('button');
+  var methodEl = document.getElementById('method');
+  var payload = document.getElementById('payload');
+  var ctypeEl = document.getElementById('ctype');
+  var reqBodyEl = document.getElementById('reqbody');
+
+  // Kept in step with BODYLESS_METHODS on the server so the two cannot drift.
+  var BODYLESS = ${JSON.stringify([...BODYLESS_METHODS])};
+
+  function syncPayload() {
+    payload.hidden = BODYLESS.indexOf(methodEl.value) !== -1;
+  }
+  methodEl.addEventListener('change', syncPayload);
+  syncPayload();
 
   form.addEventListener('submit', function (event) {
     event.preventDefault();
     var target = document.getElementById('target').value.trim();
     if (!target) return;
-    var method = document.getElementById('method').value;
+    var method = methodEl.value;
     var url = '/proxy?url=' + encodeURIComponent(target) + '&method=' + method;
+
+    var payloadText = payload.hidden ? '' : reqBodyEl.value;
+    var init = {};
+    if (payloadText !== '') {
+      // The proxy takes the upstream method from ?method=; the method used here
+      // only has to be one that may carry a body. OPTIONS would be answered as a
+      // preflight by the proxy itself and never reach the target.
+      init.method = method === 'OPTIONS' ? 'POST' : method;
+      init.body = payloadText;
+      var ctype = ctypeEl.value.trim();
+      if (ctype) init.headers = { 'content-type': ctype };
+    }
 
     button.disabled = true;
     out.dataset.open = 'true';
@@ -615,7 +692,7 @@ function indexPage(): string {
     bodyEl.textContent = '';
     var started = performance.now();
 
-    fetch(url).then(function (response) {
+    fetch(url, init).then(function (response) {
       var ms = Math.round(performance.now() - started);
       statusEl.innerHTML = '<b>' + response.status + ' ' + (response.statusText || '') + '</b> · ' + ms + ' ms';
       var lines = [];
