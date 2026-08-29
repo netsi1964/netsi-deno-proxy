@@ -145,7 +145,12 @@ function takeToken(clientId: string): { allowed: boolean; retryAfter: number } {
  */
 function clientIpOf(info: Deno.ServeHandlerInfo): string {
   const addr = info.remoteAddr;
-  return addr.transport === "tcp" ? addr.hostname : "unknown";
+  if (addr.transport !== "tcp") return "unknown";
+  // Deploy reports IPv4 callers in their IPv6-mapped form (::ffff:1.2.3.4). A
+  // target reading the header wants the dotted quad it actually recognises, and
+  // normalising here also stops one caller occupying two rate-limit buckets.
+  const mapped = addr.hostname.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  return mapped ? mapped[1] : addr.hostname;
 }
 
 /** RFC 7239 node identifier. An IPv6 address has to be bracketed and quoted. */
