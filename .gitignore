@@ -1,0 +1,12 @@
+# Deno
+.deno/
+deno.lock
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Local env
+.env
+.env.*

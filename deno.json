@@ -1,0 +1,16 @@
+{
+  "name": "netsi-deno-proxy",
+  "version": "1.0.0",
+  "exports": "./main.ts",
+  "tasks": {
+    "dev": "deno run --watch --allow-net --allow-env main.ts",
+    "start": "deno run --allow-net --allow-env main.ts",
+    "check": "deno check main.ts && deno lint && deno fmt --check"
+  },
+  "deploy": {
+    "entrypoint": "main.ts"
+  },
+  "fmt": {
+    "lineWidth": 90
+  }
+}
