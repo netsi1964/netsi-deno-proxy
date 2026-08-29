@@ -11,6 +11,8 @@
 const VERSION = "1.0.0";
 const PROXY_HEADER = "X-netsi-deno-proxy";
 const PROXY_VALUE = `netsi-deno-proxy/${VERSION}`;
+const REPO_URL = "https://github.com/netsi1964/netsi-deno-proxy";
+const SKILL_URL = `${REPO_URL}/raw/main/netsi-proxy.skill`;
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -491,6 +493,12 @@ function indexPage(): string {
   .status b { color: var(--ink); font-weight: normal; }
   .added { color: var(--flag); }
   ul.plain { padding-left: 1.2rem; color: var(--muted); }
+  a.download {
+    display: inline-block; text-decoration: none; color: var(--signal);
+    border: 1px solid var(--signal); border-radius: var(--radius);
+    padding: .5rem .9rem; font-size: .9rem;
+  }
+  a.download:hover { background: var(--signal); color: var(--paper); }
   footer { margin-top: 4rem; font-size: .85rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 1rem; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -554,7 +562,22 @@ function indexPage(): string {
   <h2>Where it differs from a direct call</h2>
   <ul class="plain">${deviations}</ul>
 
-  <footer>netsi-deno-proxy ${VERSION} · <a href="/health">/health</a> · built by Netsi</footer>
+  <h2>Teach your AI agent to use it</h2>
+  <p>A Claude skill that hands an agent this proxy's contract — url-encoding the target,
+  the <code>method</code> parameter, which errors are worth retrying and which never will be.
+  With it installed, an agent writes a working call the first time instead of guessing at
+  the query string.</p>
+
+  <p><a class="download" href="${SKILL_URL}">Download netsi-proxy.skill</a></p>
+
+  <pre>unzip netsi-proxy.skill -d ~/.claude/skills/</pre>
+
+  <p>That unpacks to <code>~/.claude/skills/netsi-proxy/</code> and is picked up in every
+  project. To share it with one repository instead, unzip it into that repo's
+  <code>.claude/skills/</code>. The file is an ordinary zip archive — clients that accept
+  skill bundles take it as it is, no unpacking needed.</p>
+
+  <footer>netsi-deno-proxy ${VERSION} · <a href="/health">/health</a> · <a href="${REPO_URL}">source</a> · built by Netsi</footer>
 </main>
 
 <script>

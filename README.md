@@ -3,9 +3,18 @@
 En gennemsigtig HTTP-proxy til **nye Deno Deploy** (`console.deno.com`). Ingen
 dependencies, ingen build, én fil.
 
+Live: <https://netsi-proxy-deno.netsi1964.deno.net>
+
 ```
 GET /proxy?url=<url-encoded>&method=POST
 ```
+
+```bash
+curl "https://netsi-proxy-deno.netsi1964.deno.net/proxy?url=https%3A%2F%2Fexample.com"
+```
+
+`url` skal url-encodes. Gør man ikke det, læser proxyen målets eget `&` som sin egen
+parameter og henter noget andet end det man bad om — som regel uden fejl.
 
 ## Kontrakt
 
@@ -47,11 +56,40 @@ proxyens CORS-holdning.
 Blokerede mål: privat, loopback, link-local, CGNAT, multicast og cloud-metadata
 (`169.254.169.254`), både IPv4 og IPv6.
 
+## Skill til AI-agenter
+
+`netsi-proxy.skill` er en Claude-skill der giver en agent proxyens kontrakt: url-encoding,
+`method`-parameteren, hvilke fejl der kan betale sig at prøve igen, og hvilke der aldrig
+gør. Med den installeret skriver agenten et kald der virker første gang i stedet for at
+gætte på query-strengen.
+
+**Download:**
+[netsi-proxy.skill](https://github.com/netsi1964/netsi-deno-proxy/raw/main/netsi-proxy.skill)
+
+**Installér** — filen er en helt almindelig zip:
+
+```bash
+# personlig, tilgængelig i alle projekter
+unzip netsi-proxy.skill -d ~/.claude/skills/
+
+# eller delt med ét repo, committet sammen med koden
+unzip netsi-proxy.skill -d .claude/skills/
+```
+
+Begge dele udpakker til en `netsi-proxy/`-mappe med `SKILL.md` og `references/api.md`.
+Claude Code samler den op ved næste start. Klienter der selv tager imod skill-bundles kan
+få `.skill`-filen som den er, uden udpakning.
+
+Kilden ligger i [.claude/skills/netsi-proxy/](.claude/skills/netsi-proxy/) — den er altså
+allerede aktiv hvis du arbejder i dette repo. `netsi-proxy.skill` i roden er det byggede
+artefakt; genbyg det med `deno task skill` når kilden ændrer sig.
+
 ## Kør lokalt
 
 ```bash
 deno task dev          # http://localhost:8000
 deno task check        # typecheck + lint + fmt
+deno task skill        # genbyg netsi-proxy.skill fra .claude/skills/
 ```
 
 ## Deploy

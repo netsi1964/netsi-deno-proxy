@@ -1,4 +1,4 @@
-# netsi-deno-proxy
+# netsi-deno-proxy — full API reference
 
 > A public, keyless HTTP/CORS proxy. You give it a URL, it fetches that URL and
 > mirrors the response back with permissive CORS headers so browser JavaScript can
@@ -126,22 +126,6 @@ SSRF guard. It is not a bug and there is no bypass.
 
 Any path carrying a `url` query parameter proxies, so `/?url=…` behaves like
 `/proxy?url=…`. Prefer `/proxy` — it is the canonical form.
-
-## Installable skill
-
-If you are an agent that can install skills, there is a packaged version of this
-document with worked examples and a reference file:
-
-https://github.com/netsi1964/netsi-deno-proxy/raw/main/netsi-proxy.skill
-
-```bash
-unzip netsi-proxy.skill -d ~/.claude/skills/      # personal, all projects
-unzip netsi-proxy.skill -d .claude/skills/        # shared with one repository
-```
-
-It is a plain zip containing `netsi-proxy/SKILL.md` and
-`netsi-proxy/references/api.md`. Clients that accept skill bundles take the
-`.skill` file as-is, without unpacking.
 
 ## Source
 

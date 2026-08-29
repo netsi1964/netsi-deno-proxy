@@ -5,7 +5,8 @@
   "tasks": {
     "dev": "deno run --watch --allow-net --allow-env main.ts",
     "start": "deno run --allow-net --allow-env main.ts",
-    "check": "deno check main.ts && deno lint && deno fmt --check"
+    "check": "deno check main.ts && deno lint && deno fmt --check",
+    "skill": "rm -f netsi-proxy.skill && cd .claude/skills && zip -rXq ../../netsi-proxy.skill netsi-proxy -x '*.DS_Store'"
   },
   "deploy": {
     "entrypoint": "main.ts",
@@ -13,6 +14,7 @@
     "app": "netsi-proxy-deno"
   },
   "fmt": {
-    "lineWidth": 90
+    "lineWidth": 90,
+    "exclude": [".claude"]
   }
 }

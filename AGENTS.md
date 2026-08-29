@@ -20,6 +20,7 @@ the HTML documentation page.
 deno task dev      # watch mode on http://localhost:8000
 deno task start    # run once
 deno task check    # deno check main.ts && deno lint && deno fmt --check
+deno task skill    # rebuild netsi-proxy.skill from .claude/skills/
 ```
 
 Run `deno task check` before every commit. `deno fmt` reformats Markdown too, at
@@ -55,15 +56,31 @@ Both are tagged `// TODO: TECH DEBT` in `main.ts` and explained in README.md.
 2. The SSRF guard checks the hostname, not the resolved address, so DNS rebinding passes.
    Harmless while the proxy shares no network with anything private.
 
+## The distributable skill
+
+`netsi-proxy.skill` in the repo root is a downloadable Claude skill teaching an agent how
+to call the proxy. It is a build artifact, committed so the README and the `/` page can
+link to a stable raw URL.
+
+- Source of truth: `.claude/skills/netsi-proxy/` (`SKILL.md` + `references/api.md`).
+  Living there means it is also active for anyone running Claude Code in this repo.
+- Rebuild with `deno task skill` after ANY edit to the source. The artifact is a plain zip
+  whose root entry is `netsi-proxy/`; that wrapping directory is what makes
+  `unzip -d ~/.claude/skills/` land correctly. Do not flatten it.
+- `deno fmt` is configured to exclude `.claude`, so the skill markdown stays
+  byte-identical to what users have installed. Do not remove that exclusion — reflowing it
+  would change the shipped bundle for cosmetic reasons.
+
 ## Keeping the docs honest
 
-Three files describe the same contract and drift apart easily:
+Four places describe the same contract and drift apart easily:
 
 - `README.md` — for humans, in Danish.
 - `llms.txt` — for LLMs and agents calling the service, in English.
+- `.claude/skills/netsi-proxy/` — the distributable skill (rebuild the bundle after).
 - `indexPage()` in `main.ts` — the HTML page served at `/`.
 
-Change the behaviour, change all three.
+Change the behaviour, change all four.
 
 ## Deploy
 
